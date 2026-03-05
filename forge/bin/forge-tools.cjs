@@ -188,6 +188,101 @@ const commands = {
   },
 
   /**
+   * Validate a phase plan: check acceptance criteria, requirement coverage,
+   * task labels, and parent-child links.
+   */
+  'plan-check'(args) {
+    const phaseId = args[0];
+    if (!phaseId) {
+      console.error('Usage: forge-tools plan-check <phase-bead-id>');
+      process.exit(1);
+    }
+
+    const phase = bdJson(`show ${phaseId}`);
+    const children = bdJson(`children ${phaseId}`);
+    const tasks = Array.isArray(children) ? children : (children?.issues || children?.children || []);
+
+    const issues = [];
+    const tasksWithoutCriteria = [];
+    const tasksWithoutLabel = [];
+
+    for (const task of tasks) {
+      if (!task.acceptance_criteria || task.acceptance_criteria.trim() === '') {
+        tasksWithoutCriteria.push({ id: task.id, title: task.title });
+      }
+      if (!(task.labels || []).includes('forge:task')) {
+        tasksWithoutLabel.push({ id: task.id, title: task.title });
+      }
+    }
+
+    if (tasksWithoutCriteria.length > 0) {
+      issues.push({
+        type: 'missing_acceptance_criteria',
+        severity: 'error',
+        tasks: tasksWithoutCriteria,
+      });
+    }
+
+    if (tasksWithoutLabel.length > 0) {
+      issues.push({
+        type: 'missing_forge_task_label',
+        severity: 'warning',
+        tasks: tasksWithoutLabel,
+      });
+    }
+
+    // Check requirement coverage via validates deps
+    // Find the parent project to get requirements
+    const parentId = phase?.parent || null;
+    let uncoveredReqs = [];
+    if (parentId) {
+      const projectChildren = bdJson(`children ${parentId}`);
+      const allIssues = Array.isArray(projectChildren)
+        ? projectChildren
+        : (projectChildren?.issues || projectChildren?.children || []);
+      const requirements = allIssues.filter(i =>
+        (i.labels || []).includes('forge:req')
+      );
+
+      // Check which requirements have validates links from any task
+      for (const req of requirements) {
+        const depsRaw = bd(`dep list ${req.id} --type validates --json`, { allowFail: true });
+        let deps = [];
+        if (depsRaw) {
+          try { deps = JSON.parse(depsRaw); } catch { /* ignore */ }
+        }
+        if (!Array.isArray(deps) || deps.length === 0) {
+          uncoveredReqs.push({ id: req.id, title: req.title });
+        }
+      }
+
+      if (uncoveredReqs.length > 0) {
+        issues.push({
+          type: 'uncovered_requirements',
+          severity: 'warning',
+          requirements: uncoveredReqs,
+        });
+      }
+    }
+
+    const passed = issues.filter(i => i.severity === 'error').length === 0;
+
+    output({
+      phase_id: phaseId,
+      phase_title: phase?.title,
+      total_tasks: tasks.length,
+      verdict: passed ? 'PASS' : 'NEEDS_REVISION',
+      issues,
+      summary: {
+        tasks_with_criteria: tasks.length - tasksWithoutCriteria.length,
+        tasks_without_criteria: tasksWithoutCriteria.length,
+        tasks_with_label: tasks.length - tasksWithoutLabel.length,
+        uncovered_requirements: uncoveredReqs.length,
+      },
+    });
+  },
+
+  /**
    * Find the project bead in the current beads database.
    */
   'find-project'() {

@@ -33,9 +33,9 @@ bd show <phase-id> --json
 
 If blocked, show what's blocking and suggest working on that first.
 
-## 3. Research (Optional)
+## 3. Research
 
-Spawn a forge-researcher agent to investigate the implementation approach:
+Spawn a **forge-researcher** agent to investigate the implementation approach:
 
 ```
 Agent(subagent_type="forge-researcher", prompt="
@@ -57,6 +57,9 @@ bd comments add <phase-id> '<findings>'
 ")
 ```
 
+If the user prefers to skip research (e.g., they already know the approach), this step
+can be skipped by passing `--no-research` or when the user says so.
+
 ## 4. Discuss Approach with User
 
 Present the research findings (if any) and the phase goal.
@@ -73,7 +76,29 @@ bd update <phase-id> --notes="Approach: <summary of decisions>"
 
 ## 5. Create Task Beads
 
-Break the phase into 2-5 concrete tasks. For each task:
+Spawn a **forge-planner** agent to break the phase into tasks:
+
+```
+Agent(subagent_type="forge-planner", prompt="
+Break this phase into 2-5 concrete tasks:
+
+Phase: <phase title> (<phase-id>)
+Goal: <phase description>
+Project: <project-id>
+Research findings: <findings from step 3, if any>
+User decisions: <approach decisions from step 4>
+Requirements addressed by this phase: <relevant requirement IDs and titles>
+
+For each task:
+1. Create the task bead with acceptance_criteria
+2. Add parent-child dep to the phase
+3. Add forge:task label
+4. Add validates dep to requirements it fulfills
+5. Add inter-task dependencies if needed
+")
+```
+
+If you prefer to create tasks directly (small phase, clear scope), do so manually:
 
 ```bash
 bd create --title="<task title>" \
@@ -94,14 +119,40 @@ Add dependencies between tasks if needed:
 bd dep add <task-b-id> <task-a-id>  # task B depends on task A
 ```
 
-## 6. Verify Plan
+## 6. Verify Plan (Plan Verification Loop)
 
-Check coverage:
-- Every task has acceptance_criteria
-- Key requirements for this phase have at least one `validates` link
-- Task dependency order makes sense
+Run automated checks first:
+```bash
+CHECK=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" plan-check <phase-id>)
+```
 
-Present the plan to the user:
+Then spawn a **forge-plan-checker** agent for thorough validation:
+
+```
+Agent(subagent_type="forge-plan-checker", prompt="
+Verify the plan for this phase:
+
+Phase ID: <phase-id>
+Project ID: <project-id>
+
+Check:
+1. Every task has specific, testable acceptance criteria
+2. Requirements addressed by this phase have validates links
+3. Tasks are appropriately sized (completable in one session)
+4. Dependencies are correct (no cycles, proper parent-child links)
+5. All tasks have forge:task label
+
+Run: node $HOME/.claude/forge/bin/forge-tools.cjs plan-check <phase-id>
+for automated coverage data.
+
+Produce a PASS or NEEDS REVISION verdict.
+")
+```
+
+**If NEEDS REVISION:** Fix the flagged issues (update acceptance criteria, add missing
+validates links, resize tasks, fix deps), then re-run the plan-checker. Repeat until PASS.
+
+**If PASS:** Present the verified plan to the user:
 ```bash
 PHASE=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" phase-context <phase-id>)
 ```
