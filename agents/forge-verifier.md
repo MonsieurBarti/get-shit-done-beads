@@ -56,3 +56,12 @@ bd comments add <phase-id> "Phase verified: all N tasks pass acceptance criteria
 - If a criterion is ambiguous, note it rather than failing
 - Always run the project's test suite as part of verification
 </constraints>
+
+<parallel_safety>
+When running in parallel with other verifier agents:
+- Each agent verifies its own task independently
+- Do NOT modify code or project state -- read-only operations
+- Test execution is safe in parallel as long as tests don't share mutable state
+- Record verification results via `bd comments add` which handles concurrency
+- If you detect test interference from another agent's verification, note it in your report
+</parallel_safety>

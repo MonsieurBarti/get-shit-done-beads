@@ -393,6 +393,157 @@ const commands = {
   },
 
   /**
+   * Save session state for forge:pause.
+   * Records active phase, in-progress tasks, and notes to bd remember.
+   */
+  'session-save'(args) {
+    const projectId = args[0];
+    const notes = args.slice(1).join(' ') || '';
+
+    if (!projectId) {
+      console.error('Usage: forge-tools session-save <project-id> [notes]');
+      process.exit(1);
+    }
+
+    // Get current project state
+    const project = bdJson(`show ${projectId}`);
+    const children = bdJson(`children ${projectId}`);
+    const issues = Array.isArray(children) ? children : (children?.issues || children?.children || []);
+
+    const phases = issues.filter(i => (i.labels || []).includes('forge:phase'));
+    const currentPhase = phases.find(p => p.status === 'in_progress') || phases.find(p => p.status === 'open');
+
+    let inProgressTasks = [];
+    if (currentPhase) {
+      const phaseChildren = bdJson(`children ${currentPhase.id}`);
+      const tasks = Array.isArray(phaseChildren) ? phaseChildren : (phaseChildren?.issues || phaseChildren?.children || []);
+      inProgressTasks = tasks.filter(t => t.status === 'in_progress');
+    }
+
+    const timestamp = new Date().toISOString();
+    const state = {
+      project_id: projectId,
+      project_title: project?.title,
+      phase_id: currentPhase?.id || null,
+      phase_title: currentPhase?.title || null,
+      tasks_in_progress: inProgressTasks.map(t => t.id),
+      notes,
+      saved_at: timestamp,
+    };
+
+    // Save as bd memory
+    const memoryKey = `forge:session:${projectId}`;
+    const memoryValue = JSON.stringify(state);
+    bd(`remember ${memoryKey} ${memoryValue}`, { allowFail: true });
+
+    output(state);
+  },
+
+  /**
+   * Restore session state for forge:resume.
+   * Reads the last saved session state from bd memories.
+   */
+  'session-restore'(args) {
+    const projectId = args[0];
+
+    // Try to find memories matching forge:session
+    const raw = bd('memories forge:session', { allowFail: true });
+    if (!raw) {
+      output({ found: false, reason: 'no_session_memories' });
+      return;
+    }
+
+    // Parse memories - bd memories returns text, try to extract JSON from it
+    const lines = raw.split('\n').filter(l => l.trim());
+    let lastState = null;
+
+    for (const line of lines) {
+      // Try to find JSON in the memory value
+      const jsonMatch = line.match(/\{.*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (!projectId || parsed.project_id === projectId) {
+            lastState = parsed;
+          }
+        } catch { /* not JSON, skip */ }
+      }
+    }
+
+    if (!lastState) {
+      output({ found: false, reason: 'no_matching_session' });
+      return;
+    }
+
+    // Enrich with current status
+    const project = bdJson(`show ${lastState.project_id}`);
+    let currentPhase = null;
+    if (lastState.phase_id) {
+      currentPhase = bdJson(`show ${lastState.phase_id}`);
+    }
+
+    let taskStatuses = [];
+    for (const taskId of (lastState.tasks_in_progress || [])) {
+      const task = bdJson(`show ${taskId}`);
+      if (task) {
+        taskStatuses.push({ id: task.id, title: task.title, status: task.status });
+      }
+    }
+
+    output({
+      found: true,
+      saved_state: lastState,
+      current: {
+        project: project ? { id: project.id, title: project.title, status: project.status } : null,
+        phase: currentPhase ? { id: currentPhase.id, title: currentPhase.title, status: currentPhase.status } : null,
+        tasks_in_progress: taskStatuses,
+      },
+    });
+  },
+
+  /**
+   * Get verification context for a phase: tasks with their acceptance criteria and status.
+   */
+  'verify-phase'(args) {
+    const phaseId = args[0];
+    if (!phaseId) {
+      console.error('Usage: forge-tools verify-phase <phase-bead-id>');
+      process.exit(1);
+    }
+
+    const phase = bdJson(`show ${phaseId}`);
+    const children = bdJson(`children ${phaseId}`);
+    const tasks = Array.isArray(children) ? children : (children?.issues || children?.children || []);
+
+    const verificationItems = tasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      acceptance_criteria: t.acceptance_criteria || null,
+      has_criteria: !!(t.acceptance_criteria && t.acceptance_criteria.trim()),
+    }));
+
+    const closedWithCriteria = verificationItems.filter(t => t.status === 'closed' && t.has_criteria);
+    const closedNoCriteria = verificationItems.filter(t => t.status === 'closed' && !t.has_criteria);
+    const notClosed = verificationItems.filter(t => t.status !== 'closed');
+
+    output({
+      phase_id: phaseId,
+      phase_title: phase?.title,
+      phase_status: phase?.status,
+      tasks: verificationItems,
+      summary: {
+        total: tasks.length,
+        closed_with_criteria: closedWithCriteria.length,
+        closed_no_criteria: closedNoCriteria.length,
+        not_closed: notClosed.length,
+        ready_for_uat: closedWithCriteria.length,
+        needs_completion: notClosed.length,
+      },
+    });
+  },
+
+  /**
    * Find the project bead in the current beads database.
    */
   'find-project'() {

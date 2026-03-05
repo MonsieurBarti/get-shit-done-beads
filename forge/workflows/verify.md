@@ -7,39 +7,68 @@ then human UAT confirmation. Close verified work and update phase status.
 
 ## 1. Resolve Phase
 
-Same resolution as other workflows. Load phase context:
+If a phase number or ID was provided, resolve it. Otherwise find the current phase.
+
+Load verification context:
 ```bash
-PHASE=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" phase-context <phase-id>)
+VERIFY=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" verify-phase <phase-id>)
 ```
+
+This returns all tasks with acceptance criteria and a summary of what's ready for UAT.
+
+If the phase has tasks that aren't closed yet (`needs_completion > 0`), warn the user
+that some tasks still need to be executed before verification can complete. Suggest
+`/forge:execute <phase>` for incomplete tasks.
 
 ## 2. Gather Acceptance Criteria
 
-For each closed task in the phase, extract its acceptance_criteria:
-```bash
-bd show <task-id> --json
-```
+For each closed task, extract its acceptance_criteria from the verify-phase output.
+Tasks without acceptance criteria can still be verified but note the gap.
+
+Group tasks into:
+- **Verifiable**: closed with acceptance_criteria
+- **No criteria**: closed but missing acceptance_criteria (verify existence only)
+- **Incomplete**: not yet closed (skip, report as incomplete)
 
 ## 3. Automated Verification
 
-For each task, attempt to verify acceptance criteria programmatically:
-- Run existing tests (`npm test`, `cargo test`, `pytest`, etc.)
-- Check that expected files exist
-- Verify expected behavior via CLI commands
-- Look for regressions
+For each verifiable task, attempt to verify acceptance criteria programmatically.
+
+**Spawn forge-verifier agents** for independent tasks. If multiple tasks can be
+verified simultaneously, spawn agents **in parallel**:
+
+```
+Agent(forge-verifier): "Verify task <task-id>: <title>
+  Acceptance criteria: <criteria>
+  Phase context: <phase summary>"
+```
+
+Each verifier agent will:
+1. **Code inspection** -- read relevant code, check it exists and looks correct
+2. **Test execution** -- run any tests that cover this task's functionality
+3. **Behavioral check** -- if applicable, run the feature and verify it works
+4. **Regression check** -- verify no existing tests are broken
 
 Record results as comments:
 ```bash
-bd comments add <task-id> "Verification: <PASS|FAIL> - <details>"
+bd comments add <task-id> "Verification: PASS|FAIL - <details>"
 ```
+
+**Single task** -- verify it directly without spawning an agent (saves context).
 
 ## 4. UAT with User
 
 Present each task's acceptance criteria and automated verification results.
-Ask the user to confirm:
+Use AskUserQuestion for confirmation:
 
-Use AskUserQuestion for each task (or batch if many):
-- "Task: <title> -- Acceptance: <criteria> -- Auto-check: <PASS/FAIL>. Does this meet your expectations?"
+**For few tasks (1-3)**: present each individually:
+- "Task: <title>\n  Criteria: <criteria>\n  Auto-check: <PASS/FAIL details>\n  Verified?"
 - Options: "Yes, verified" / "No, needs work" / "Skip for now"
+
+**For many tasks (4+)**: batch presentation:
+- Present a summary table of all tasks with auto-check results
+- "All tasks shown above pass automated checks. Confirm all, or specify which need rework?"
+- Options: "All verified" / "These need work: <ids>" / "Let me review individually"
 
 For tasks that need work:
 ```bash
@@ -68,6 +97,9 @@ bd dep list <task-id> --type=validates
 
 Report any requirements that still have no validated tasks across all closed phases.
 
-Suggest next step: `/forge:plan <next-phase>` or `/forge:progress`.
+Suggest next step:
+- Rework needed -> `/forge:execute <phase>`
+- Next phase unplanned -> `/forge:plan <next-phase>`
+- All done -> `/forge:progress` for full dashboard
 
 </process>
