@@ -16,9 +16,9 @@ Debug issues using scientific method with subagent isolation.
 <context>
 User's issue: $ARGUMENTS
 
-Check for active sessions:
+Check for active debug sessions:
 ```bash
-ls .planning/debug/*.md 2>/dev/null | grep -v resolved | head -5
+bd list --label forge:debug --status open --json
 ```
 </context>
 
@@ -26,9 +26,13 @@ ls .planning/debug/*.md 2>/dev/null | grep -v resolved | head -5
 
 ## 1. Check Active Sessions
 
+```bash
+bd list --label forge:debug --status open --json
+```
+
 If active sessions exist AND no $ARGUMENTS:
-- List sessions with status, hypothesis, next action
-- User picks number to resume OR describes new issue
+- List sessions with status, current hypothesis (from notes), next action
+- User picks one to resume OR describes new issue
 
 If $ARGUMENTS provided OR user describes new issue:
 - Continue to symptom gathering
@@ -45,7 +49,26 @@ Use AskUserQuestion for each:
 
 After all gathered, confirm ready to investigate.
 
-## 3. Spawn forge-debugger Agent
+## 3. Create Debug Session Bead
+
+Create a bead to track the debug session:
+
+```bash
+bd create --title="Debug: {slug}" \
+  --description="trigger: {verbatim user input}
+expected: {expected}
+actual: {actual}
+errors: {errors}
+reproduction: {reproduction}
+timeline: {timeline}" \
+  --type=task \
+  --label forge:debug \
+  --json
+```
+
+Save the returned bead ID as `{debug_id}`.
+
+## 4. Spawn forge-debugger Agent
 
 Fill prompt and spawn:
 
@@ -54,6 +77,7 @@ Fill prompt and spawn:
 Investigate issue: {slug}
 
 **Summary:** {trigger}
+**Debug bead:** {debug_id}
 </objective>
 
 <symptoms>
@@ -68,10 +92,6 @@ timeline: {timeline}
 symptoms_prefilled: true
 goal: find_and_fix
 </mode>
-
-<debug_file>
-Create: .planning/debug/{slug}.md
-</debug_file>
 ```
 
 ```
@@ -82,7 +102,7 @@ Agent(
 )
 ```
 
-## 4. Handle Agent Return
+## 5. Handle Agent Return
 
 **If `## ROOT CAUSE FOUND`:**
 - Display root cause and evidence summary
@@ -95,9 +115,9 @@ Agent(
 - Present checkpoint details to user
 - Get user response
 - If checkpoint type is `human-verify`:
-  - If user confirms fixed: continue so agent can finalize/resolve/archive
+  - If user confirms fixed: continue so agent can finalize/close
   - If user reports issues: continue so agent returns to investigation/fixing
-- Spawn continuation agent (see step 5)
+- Spawn continuation agent (see step 6)
 
 **If `## INVESTIGATION INCONCLUSIVE`:**
 - Show what was checked and eliminated
@@ -106,19 +126,18 @@ Agent(
   - "Manual investigation" - done
   - "Add more context" - gather more symptoms, spawn again
 
-## 5. Spawn Continuation Agent (After Checkpoint)
+## 6. Spawn Continuation Agent (After Checkpoint)
 
 When user responds to checkpoint, spawn fresh agent:
 
 ```markdown
 <objective>
-Continue debugging {slug}. Evidence is in the debug file.
+Continue debugging {slug}.
+**Debug bead:** {debug_id}
 </objective>
 
 <prior_state>
-<files_to_read>
-- .planning/debug/{slug}.md (Debug session state)
-</files_to_read>
+Load state from bead: `bd show {debug_id} --json`
 </prior_state>
 
 <checkpoint_response>
@@ -142,9 +161,10 @@ Agent(
 </process>
 
 <success_criteria>
-- [ ] Active sessions checked
+- [ ] Active sessions checked via bd list
 - [ ] Symptoms gathered (if new)
-- [ ] forge-debugger spawned with context
+- [ ] Debug session bead created with forge:debug label
+- [ ] forge-debugger spawned with bead ID
 - [ ] Checkpoints handled correctly
 - [ ] Root cause confirmed before fixing
 </success_criteria>

@@ -12,6 +12,7 @@ This document defines how Forge uses beads to represent project management conce
 | `forge:task` | Task bead | An executable task within a phase |
 | `forge:research` | Task bead | Research output for a phase |
 | `forge:quick` | Task bead | A quick task (ad-hoc, outside phase roadmap) |
+| `forge:debug` | Task bead | Active debug session (via /forge:debug) |
 
 ## Bead Types
 
@@ -22,6 +23,7 @@ This document defines how Forge uses beads to represent project management conce
 | Phase | `epic` | project epic | description (goal), notes (approach) |
 | Task | `task` | phase epic | description (what), acceptance_criteria (done when), estimated_minutes |
 | Research | `task` | phase epic | notes (findings) |
+| Debug Session | `task` | none | description (symptoms), notes (investigation state), design (resolution) |
 
 ## Dependency Patterns
 
