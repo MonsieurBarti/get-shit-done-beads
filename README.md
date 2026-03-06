@@ -305,6 +305,10 @@ The release workflow creates a GitHub Release with a tarball and auto-updates th
 
 ---
 
+## Acknowledgments
+
+Forge is inspired by [Get Shit Done (GSD)](https://github.com/gsd-build/get-shit-done).
+
 ## License
 
 MIT

@@ -56,7 +56,7 @@ Overrides take precedence over the profile. Valid values: `opus`, `sonnet`, `hai
 
 ## Switching Profiles
 
-Runtime: `/gsd:set-profile <profile>`
+Runtime: `/forge:settings set model_profile <profile>`
 
 Settings key: `model_profile` (values: `quality`, `balanced`, `budget`)
 

@@ -4,7 +4,7 @@
 /**
  * forge-tools.cjs -- Thin helper that queries beads and formats context for workflows.
  *
- * Unlike GSD's gsd-tools.cjs which does heavy state/roadmap/config CRUD on markdown files,
+ * Unlike tools that do heavy state/roadmap/config CRUD on markdown files,
  * forge-tools delegates most work to `bd` commands. This file mostly:
  * 1. Queries beads and formats results as context JSON for workflows
  * 2. Provides convenience wrappers for common bead patterns
