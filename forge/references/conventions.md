@@ -7,6 +7,7 @@ This document defines how Forge uses beads to represent project management conce
 | Label | Applied To | Meaning |
 |-------|-----------|---------|
 | `forge:project` | Project epic | Top-level project container |
+| `forge:milestone` | Milestone epic | A milestone within the project (groups phases and requirements) |
 | `forge:phase` | Phase epic | A phase of work within the project |
 | `forge:req` | Feature bead | A project requirement |
 | `forge:task` | Task bead | An executable task within a phase |
@@ -19,7 +20,8 @@ This document defines how Forge uses beads to represent project management conce
 | Concept | issue_type | Parent | Key Fields |
 |---------|-----------|--------|------------|
 | Project | `epic` | none | description (vision), design (scope/constraints) |
-| Requirement | `feature` | project epic | acceptance_criteria, priority |
+| Milestone | `epic` | project epic | description (goal), design (audit results), notes (retrospective) |
+| Requirement | `feature` | project or milestone epic | acceptance_criteria, priority |
 | Phase | `epic` | project epic | description (goal), notes (approach) |
 | Task | `task` | phase epic | description (what), acceptance_criteria (done when), estimated_minutes |
 | Research | `task` | phase epic | notes (findings) |
@@ -76,8 +78,10 @@ open -> deferred (explicitly deferred for later)
 Forge uses `bd remember` for persistent context:
 - `forge:project:<id>:vision` -- Project vision statement
 - `forge:project:<id>:decisions` -- Key architecture decisions
+- `forge:milestone:<id>:goal` -- Milestone goal statement
 - `forge:phase:<id>:approach` -- Chosen implementation approach
 - `forge:session:last-phase` -- Last active phase for resume
+- `forge:session:last-milestone` -- Last active milestone for resume
 
 ## Querying Patterns
 

@@ -2107,6 +2107,170 @@ const commands = {
   },
 
   /**
+   * List milestone beads under a project.
+   * Usage: forge-tools milestone-list <project-id>
+   */
+  'milestone-list'(args) {
+    const projectId = args[0];
+    if (!projectId) {
+      console.error('Usage: forge-tools milestone-list <project-id>');
+      process.exit(1);
+    }
+
+    const children = bdJson(`children ${projectId}`);
+    const issues = Array.isArray(children) ? children : (children?.issues || children?.children || []);
+    const milestones = issues.filter(i => (i.labels || []).includes('forge:milestone'));
+
+    const result = milestones.map(m => {
+      // Get phases under this milestone
+      const mChildren = bdJson(`children ${m.id}`);
+      const mIssues = Array.isArray(mChildren) ? mChildren : (mChildren?.issues || mChildren?.children || []);
+      const phases = mIssues.filter(i => (i.labels || []).includes('forge:phase'));
+      const reqs = mIssues.filter(i => (i.labels || []).includes('forge:req'));
+
+      const closedPhases = phases.filter(p => p.status === 'closed');
+      const closedReqs = reqs.filter(r => r.status === 'closed');
+
+      return {
+        id: m.id,
+        title: m.title,
+        status: m.status,
+        description: m.description,
+        phases: phases.map(p => ({ id: p.id, title: p.title, status: p.status })),
+        requirements: reqs.map(r => ({ id: r.id, title: r.title, status: r.status })),
+        stats: {
+          total_phases: phases.length,
+          closed_phases: closedPhases.length,
+          total_requirements: reqs.length,
+          closed_requirements: closedReqs.length,
+        },
+      };
+    });
+
+    output({
+      project_id: projectId,
+      milestones: result,
+      total: result.length,
+    });
+  },
+
+  /**
+   * Audit a milestone: check requirement coverage and phase completion.
+   * Usage: forge-tools milestone-audit <milestone-id>
+   */
+  'milestone-audit'(args) {
+    const milestoneId = args[0];
+    if (!milestoneId) {
+      console.error('Usage: forge-tools milestone-audit <milestone-id>');
+      process.exit(1);
+    }
+
+    const milestone = bdJson(`show ${milestoneId}`);
+    if (!milestone) {
+      console.error(`Milestone not found: ${milestoneId}`);
+      process.exit(1);
+    }
+
+    // Get children (phases and requirements)
+    const children = bdJson(`children ${milestoneId}`);
+    const issues = Array.isArray(children) ? children : (children?.issues || children?.children || []);
+    const phases = issues.filter(i => (i.labels || []).includes('forge:phase'));
+    const requirements = issues.filter(i => (i.labels || []).includes('forge:req'));
+
+    // Check phase health
+    const phaseHealth = phases.map(phase => {
+      const pChildren = bdJson(`children ${phase.id}`);
+      const pIssues = Array.isArray(pChildren) ? pChildren : (pChildren?.issues || pChildren?.children || []);
+      const tasks = pIssues.filter(i => (i.labels || []).includes('forge:task'));
+      const closedTasks = tasks.filter(t => t.status === 'closed');
+      return {
+        id: phase.id,
+        title: phase.title,
+        status: phase.status,
+        total_tasks: tasks.length,
+        closed_tasks: closedTasks.length,
+        open_tasks: tasks.length - closedTasks.length,
+      };
+    });
+
+    // Check requirement coverage via validates dependencies
+    const reqCoverage = requirements.map(req => {
+      const depsRaw = bd(`dep list ${req.id} --type validates --json`, { allowFail: true });
+      let validators = [];
+      if (depsRaw) {
+        try {
+          const deps = JSON.parse(depsRaw);
+          validators = Array.isArray(deps) ? deps : (deps.dependencies || []);
+        } catch { /* parse error */ }
+      }
+      const closedValidators = validators.filter(v => v.status === 'closed');
+      let coverage = 'unsatisfied';
+      if (closedValidators.length > 0) coverage = 'satisfied';
+      else if (validators.length > 0) coverage = 'partial';
+
+      return {
+        id: req.id,
+        title: req.title,
+        status: req.status,
+        coverage,
+        validator_count: validators.length,
+        closed_validator_count: closedValidators.length,
+      };
+    });
+
+    const uncovered = reqCoverage.filter(r => r.coverage === 'unsatisfied');
+    const partial = reqCoverage.filter(r => r.coverage === 'partial');
+    const satisfied = reqCoverage.filter(r => r.coverage === 'satisfied');
+
+    output({
+      milestone: { id: milestone.id, title: milestone.title, status: milestone.status },
+      phases: phaseHealth,
+      requirements: reqCoverage,
+      uncovered_requirements: uncovered,
+      partial_requirements: partial,
+      satisfied_requirements: satisfied,
+      summary: {
+        total_phases: phases.length,
+        closed_phases: phases.filter(p => p.status === 'closed').length,
+        total_requirements: requirements.length,
+        satisfied: satisfied.length,
+        partial: partial.length,
+        unsatisfied: uncovered.length,
+      },
+    });
+  },
+
+  /**
+   * Create a milestone epic bead under a project.
+   * Usage: forge-tools milestone-create <project-id> <milestone-name>
+   */
+  'milestone-create'(args) {
+    const projectId = args[0];
+    const name = args.slice(1).join(' ');
+    if (!projectId || !name) {
+      console.error('Usage: forge-tools milestone-create <project-id> <milestone-name>');
+      process.exit(1);
+    }
+
+    const title = `Milestone: ${name}`;
+    const created = bdJson(`create --title="${title}" --type=epic --priority=1`);
+    if (!created || !created.id) {
+      console.error('Failed to create milestone bead');
+      process.exit(1);
+    }
+
+    bd(`label add ${created.id} forge:milestone`);
+    bd(`dep add ${created.id} ${projectId} --type=parent-child`);
+
+    output({
+      ok: true,
+      milestone_id: created.id,
+      title,
+      project_id: projectId,
+    });
+  },
+
+  /**
    * Find the project bead in the current beads database.
    */
   'find-project'() {
