@@ -1,10 +1,10 @@
 {
-  "name": "forge",
-  "version": "0.1.0",
+  "name": "forgeflow",
+  "version": "0.2.0",
   "description": "Project orchestration for Claude Code, backed by beads",
   "type": "commonjs",
   "bin": {
-    "forge": "install.js"
+    "forgeflow": "install.js"
   },
   "scripts": {
     "install-plugin": "node install.js",

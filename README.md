@@ -6,8 +6,8 @@
 
 Instead of managing state through markdown planning files, Forge uses beads as its data layer — epics for milestones, dependency graphs for phase ordering, and bead metadata for plans, requirements, and verification.
 
-[![npm version](https://img.shields.io/badge/npm-v0.1.0-CB3837?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/forge)
-[![Tests](https://img.shields.io/github/actions/workflow/status/MonsieurBarti/forge/ci.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/MonsieurBarti/forge/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/badge/npm-v0.2.0-CB3837?style=for-the-badge&logo=npm&logoColor=white)](https://www.npmjs.com/package/forgeflow)
+[![Tests](https://img.shields.io/github/actions/workflow/status/MonsieurBarti/forgeflow/ci.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/MonsieurBarti/forgeflow/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 </div>
@@ -37,22 +37,22 @@ The complexity is in the system. What you see: a few commands that just work.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew tap MonsieurBarti/forge
-brew install forge
-node "$(brew --prefix forge)/libexec/install.js"
+brew tap MonsieurBarti/forgeflow
+brew install forgeflow
+node "$(brew --prefix forgeflow)/libexec/install.js"
 ```
 
 ### npx (any platform)
 
 ```bash
-npx forge
+npx forgeflow
 ```
 
 ### Manual
 
 ```bash
-git clone https://github.com/MonsieurBarti/forge.git
-cd forge
+git clone https://github.com/MonsieurBarti/forgeflow.git
+cd forgeflow
 node install.js
 ```
 
