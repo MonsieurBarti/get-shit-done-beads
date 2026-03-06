@@ -112,6 +112,23 @@ Restore session context from previous pause.
 
 - Loads project, current phase, in-progress tasks, recent decisions
 
+## Todo Capture
+
+**`/forge:add-todo [description]`**
+Capture an idea or task as a todo bead for later work.
+
+- Creates a `forge:todo` labeled bead under the project epic
+- No phase assignment -- lives in project backlog
+- With description argument: uses it as the title directly
+- Without argument: extracts context from recent conversation
+
+**`/forge:check-todos [area]`**
+List pending todos and select one to work on.
+
+- Lists all open `forge:todo` beads with title, area, and age
+- Optional area filter to narrow the list
+- Select a todo to: work on it now (via `/forge:quick`), add to a phase, brainstorm, or delete
+
 ## Debugging
 
 **`/forge:debug [issue description]`**
@@ -177,6 +194,7 @@ Forge stores everything as beads:
 | Task | Task | (under phase epic) |
 | Debug session | Task | `forge:debug` |
 | Quick task | Task | `forge:quick` |
+| Todo | Task | `forge:todo` |
 
 ## Common Workflows
 

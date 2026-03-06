@@ -2031,6 +2031,82 @@ const commands = {
   },
 
   /**
+   * List pending forge:todo beads (status=open).
+   * Returns: { todo_count, todos: [{ id, title, status, description, notes, created_at }] }
+   */
+  'todo-list'() {
+    const result = bd('list --label forge:todo --status open --json', { allowFail: true });
+    if (!result) {
+      output({ todo_count: 0, todos: [] });
+      return;
+    }
+    try {
+      const data = JSON.parse(result);
+      const issues = Array.isArray(data) ? data : (data.issues || []);
+      const todos = issues.map(i => ({
+        id: i.id,
+        title: i.title || '',
+        status: i.status || 'open',
+        description: i.description || '',
+        notes: i.notes || '',
+        created_at: i.created_at || i.created || '',
+      }));
+      output({ todo_count: todos.length, todos });
+    } catch {
+      output({ todo_count: 0, todos: [] });
+    }
+  },
+
+  /**
+   * Create a new forge:todo bead under a project.
+   * Usage: todo-create <project-id> <title> [description] [area] [files]
+   * Returns: { todo_id }
+   */
+  'todo-create'(args) {
+    const projectId = args[0];
+    const title = args[1];
+    const description = args[2] || '';
+    const area = args[3] || 'general';
+    const files = args[4] || '';
+
+    if (!projectId || !title) {
+      console.error('Usage: todo-create <project-id> <title> [description] [area] [files]');
+      process.exit(1);
+    }
+
+    const descParts = [description];
+    if (area) descParts.push(`Area: ${area}`);
+    if (files) descParts.push(`Files: ${files}`);
+    const fullDesc = descParts.filter(Boolean).join('\n');
+
+    const result = bd(`create --title="${title.replace(/"/g, '\\"')}" --description="${fullDesc.replace(/"/g, '\\"')}" --type=task --priority=3 --json`);
+    if (!result) {
+      console.error('Failed to create todo bead');
+      process.exit(1);
+    }
+
+    let todoId;
+    try {
+      const data = JSON.parse(result);
+      todoId = data.id || data.issue_id;
+    } catch {
+      const match = result.match(/([a-z]+-[a-z0-9]+)/);
+      todoId = match ? match[1] : null;
+    }
+
+    if (!todoId) {
+      console.error('Failed to parse todo bead ID from:', result);
+      process.exit(1);
+    }
+
+    // Label and wire to project
+    bd(`label add ${todoId} forge:todo`, { allowFail: true });
+    bd(`dep add ${todoId} ${projectId} --type=parent-child`, { allowFail: true });
+
+    output({ todo_id: todoId });
+  },
+
+  /**
    * Find the project bead in the current beads database.
    */
   'find-project'() {
