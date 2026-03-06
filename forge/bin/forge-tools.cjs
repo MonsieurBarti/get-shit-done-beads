@@ -1805,6 +1805,85 @@ const commands = {
   },
 
   /**
+   * Initialize a quick task workflow.
+   * Consolidates project lookup, model resolution for all agent roles,
+   * and settings into a single call.
+   *
+   * Usage: forge-tools init-quick [description]
+   * Returns: { project, models, settings }
+   */
+  'init-quick'(args) {
+    const description = args.join(' ').trim() || null;
+
+    // 1. Find project
+    const projectResult = bd('list --label forge:project --json', { allowFail: true });
+    let project = null;
+    if (projectResult) {
+      try {
+        const data = JSON.parse(projectResult);
+        const issues = Array.isArray(data) ? data : (data.issues || []);
+        if (issues.length > 0) project = issues[0];
+      } catch { /* parse error */ }
+    }
+
+    // 2. Resolve models for all quick-relevant roles
+    let globalModels = {};
+    try {
+      const text = fs.readFileSync(GLOBAL_SETTINGS_PATH, 'utf8');
+      const parsed = parseFrontmatter(text);
+      globalModels = (parsed.models && typeof parsed.models === 'object') ? parsed.models : {};
+    } catch { /* no global settings */ }
+
+    let projectModels = {};
+    try {
+      const projectPath = path.resolve(process.cwd(), PROJECT_SETTINGS_NAME);
+      const parsed = parseSimpleYaml(fs.readFileSync(projectPath, 'utf8'));
+      projectModels = (parsed.models && typeof parsed.models === 'object') ? parsed.models : {};
+    } catch { /* no project settings */ }
+
+    function resolveModel(role) {
+      if (projectModels[role]) return { model: projectModels[role], source: 'project' };
+      if (globalModels[role]) return { model: globalModels[role], source: 'global' };
+      if (projectModels['default']) return { model: projectModels['default'], source: 'project:default' };
+      if (globalModels['default']) return { model: globalModels['default'], source: 'global:default' };
+      return { model: null, source: null };
+    }
+
+    const models = {
+      planner: resolveModel('planner'),
+      executor: resolveModel('executor'),
+      plan_checker: resolveModel('plan_checker'),
+      verifier: resolveModel('verifier'),
+    };
+
+    // 3. Load merged settings
+    const merged = { ...SETTINGS_DEFAULTS };
+    try {
+      const globalText = fs.readFileSync(GLOBAL_SETTINGS_PATH, 'utf8');
+      const globalSettings = parseFrontmatter(globalText);
+      for (const [key, val] of Object.entries(globalSettings)) {
+        if (key in SETTINGS_DEFAULTS) merged[key] = val;
+      }
+    } catch { /* no global settings */ }
+    try {
+      const projectPath = path.resolve(process.cwd(), PROJECT_SETTINGS_NAME);
+      const projectSettings = parseSimpleYaml(fs.readFileSync(projectPath, 'utf8'));
+      for (const [key, val] of Object.entries(projectSettings)) {
+        if (key in SETTINGS_DEFAULTS) merged[key] = val;
+      }
+    } catch { /* no project settings */ }
+
+    output({
+      found: !!project,
+      project_id: project ? project.id : null,
+      project_title: project ? project.title : null,
+      description,
+      models,
+      settings: merged,
+    });
+  },
+
+  /**
    * Find the project bead in the current beads database.
    */
   'find-project'() {

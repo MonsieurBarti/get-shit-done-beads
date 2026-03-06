@@ -70,14 +70,22 @@ Default (no flags):
 
 ---
 
-**Step 2: Find project and create quick task bead**
+**Step 2: Initialize and create quick task bead**
 
 ```bash
-PROJECT=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" find-project)
+INIT=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" init-quick "$DESCRIPTION")
 ```
 
-Extract the project ID from the JSON. If no project found, error:
-"No Forge project found. Run `/forge:new` first."
+Parse the JSON for: `found`, `project_id`, `models` (planner, executor, plan_checker, verifier),
+`settings` (auto_commit, plan_check, parallel_execution, etc.).
+
+If `found` is false, error: "No Forge project found. Run `/forge:new` first."
+
+Store model values for later agent spawns:
+- `$PLANNER_MODEL` = `models.planner.model` (may be null)
+- `$EXECUTOR_MODEL` = `models.executor.model` (may be null)
+- `$CHECKER_MODEL` = `models.plan_checker.model` (may be null)
+- `$VERIFIER_MODEL` = `models.verifier.model` (may be null)
 
 Create the quick task bead:
 ```bash
@@ -168,10 +176,10 @@ Read project context:
 CONTEXT=$(node "$HOME/.claude/forge/bin/forge-tools.cjs" project-context $PROJECT_ID)
 ```
 
-Spawn forge-planner with quick mode constraints:
+Spawn forge-planner with quick mode constraints (pass `model` if `$PLANNER_MODEL` is non-null):
 
 ```
-Agent(subagent_type="forge-planner", prompt="
+Agent(subagent_type="forge-planner", model="<$PLANNER_MODEL or omit if null>", prompt="
 Create 1-3 focused tasks for this quick task:
 
 Quick Task: ${DESCRIPTION}
@@ -223,10 +231,10 @@ Display:
 Spawning plan checker...
 ```
 
-Spawn forge-plan-checker:
+Spawn forge-plan-checker (pass `model` if `$CHECKER_MODEL` is non-null):
 
 ```
-Agent(subagent_type="forge-plan-checker", prompt="
+Agent(subagent_type="forge-plan-checker", model="<$CHECKER_MODEL or omit if null>", prompt="
 Verify the plan for this quick task:
 
 Quick Task Bead: ${QUICK_ID}
@@ -280,10 +288,10 @@ TASKS=$(bd children $QUICK_ID --json)
 
 For tasks in each wave:
 
-**Multiple independent tasks** -- spawn forge-executor agents in **parallel**:
+**Multiple independent tasks** -- spawn forge-executor agents in **parallel** (pass `model` if `$EXECUTOR_MODEL` is non-null):
 
 ```
-Agent(subagent_type="forge-executor", prompt="
+Agent(subagent_type="forge-executor", model="<$EXECUTOR_MODEL or omit if null>", prompt="
 Execute this task:
 
 Task: <task title> (<task-id>)
@@ -330,7 +338,7 @@ Spawning verifier...
 ```
 
 ```
-Agent(subagent_type="forge-verifier", prompt="
+Agent(subagent_type="forge-verifier", model="<$VERIFIER_MODEL or omit if null>", prompt="
 Verify quick task goal achievement.
 
 Quick Task Bead: ${QUICK_ID}
