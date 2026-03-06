@@ -1884,6 +1884,100 @@ const commands = {
   },
 
   /**
+   * List active debug sessions (beads with forge:debug label, not closed).
+   * Returns: { sessions: [{ id, title, status, notes, description }] }
+   */
+  'debug-list'() {
+    const result = bd('list --label forge:debug --status open --json', { allowFail: true });
+    if (!result) {
+      output({ sessions: [] });
+      return;
+    }
+    try {
+      const data = JSON.parse(result);
+      const issues = Array.isArray(data) ? data : (data.issues || []);
+      const sessions = issues.map(i => ({
+        id: i.id,
+        title: i.title || '',
+        status: i.status || 'open',
+        notes: i.notes || '',
+        description: i.description || '',
+      }));
+      output({ sessions });
+    } catch {
+      output({ sessions: [] });
+    }
+  },
+
+  /**
+   * Create a new debug session bead.
+   * Usage: debug-create <slug> <description>
+   * Returns: { debug_id, slug }
+   */
+  'debug-create'(args) {
+    const slug = args[0] || 'debug-session';
+    const description = args.slice(1).join(' ') || '';
+    const title = `Debug: ${slug}`;
+
+    const result = bd(`create --title="${title}" --description="${description}" --type=task --json`);
+    if (!result) {
+      console.error('Failed to create debug bead');
+      process.exit(1);
+    }
+
+    let debugId;
+    try {
+      const data = JSON.parse(result);
+      debugId = data.id || data.issue_id;
+    } catch {
+      // Try to extract ID from non-JSON output
+      const match = result.match(/([a-z]+-[a-z0-9]+)/);
+      debugId = match ? match[1] : null;
+    }
+
+    if (!debugId) {
+      console.error('Failed to parse debug bead ID from:', result);
+      process.exit(1);
+    }
+
+    // Label and claim the debug bead
+    bd(`label add ${debugId} forge:debug`, { allowFail: true });
+    bd(`update ${debugId} --status=in_progress`, { allowFail: true });
+
+    output({ debug_id: debugId, slug });
+  },
+
+  /**
+   * Update a debug session bead's notes or design fields.
+   * Usage: debug-update <id> <field> <value>
+   * Fields: notes, design, status
+   * Returns: { updated: true, id }
+   */
+  'debug-update'(args) {
+    const id = args[0];
+    const field = args[1];
+    const value = args.slice(2).join(' ');
+
+    if (!id || !field) {
+      console.error('Usage: debug-update <id> <field> <value>');
+      process.exit(1);
+    }
+
+    if (field === 'notes') {
+      bd(`update ${id} --notes="${value.replace(/"/g, '\\"')}"`, { allowFail: true });
+    } else if (field === 'design') {
+      bd(`update ${id} --design="${value.replace(/"/g, '\\"')}"`, { allowFail: true });
+    } else if (field === 'status') {
+      bd(`update ${id} --status=${value}`, { allowFail: true });
+    } else {
+      console.error(`Unknown field: ${field}. Use: notes, design, status`);
+      process.exit(1);
+    }
+
+    output({ updated: true, id });
+  },
+
+  /**
    * Find the project bead in the current beads database.
    */
   'find-project'() {
